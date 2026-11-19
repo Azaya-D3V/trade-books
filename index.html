@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trade Books</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1d2330;--muted:#6b7385;--line:#e3e6ec;--acc:#1f5eff;--acc2:#e8eeff;--ok:#127a46;--okbg:#e5f5ec;--bad:#b42318;--badbg:#fdecea;--warn:#a15c00;--warnbg:#fff4e0}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--ink);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+header h1{font-size:16px;margin:0;font-weight:600}
+header .co{color:#aab3c5;font-size:13px}
+header .sync{margin-left:auto;font-size:12px;color:#aab3c5}
+nav{display:flex;gap:2px;background:#fff;border-bottom:1px solid var(--line);padding:0 12px;overflow-x:auto}
+nav button{border:0;background:none;padding:11px 12px;font:inherit;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+nav button.on{color:var(--acc);border-bottom-color:var(--acc);font-weight:600}
+main{max-width:1180px;margin:0 auto;padding:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.card h2{font-size:15px;margin:0 0 12px}
+.grid{display:grid;gap:12px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.kpi .l{color:var(--muted);font-size:12px}.kpi .v{font-size:20px;font-weight:650;margin-top:2px;font-variant-numeric:tabular-nums}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:3px}
+input,select,textarea{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:7px;font:inherit;background:#fff;color:var(--ink)}
+input:focus,select:focus{outline:2px solid var(--acc2);border-color:var(--acc)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.row>div{flex:1 1 140px;min-width:120px}
+.btn{border:1px solid var(--line);background:#fff;padding:7px 13px;border-radius:7px;cursor:pointer;font:inherit;color:var(--ink)}
+.btn.p{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn.d{color:var(--bad)}
+.btn.sm{padding:3px 8px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:default}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:12px;color:var(--muted);font-weight:600;background:#fafbfc}
+td.n,th.n{text-align:right;white-space:nowrap}
+td:first-child{white-space:nowrap}
+tr.tot td{font-weight:650;border-top:2px solid var(--ink)}
+tr.sec td{font-weight:650;background:#fafbfc}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px}
+.ok{background:var(--okbg);color:var(--ok)}.bad{background:var(--badbg);color:var(--bad)}.warn{background:var(--warnbg);color:var(--warn)}.neu{background:#eef0f4;color:var(--muted)}
+.muted{color:var(--muted)}.small{font-size:12px}
+.msg{padding:9px 12px;border-radius:8px;margin:8px 0;font-size:13px}
+.hide{display:none}
+.lines td{padding:4px}
+.lines input,.lines select{padding:5px 7px}
+.scroll{overflow-x:auto}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+#toast.on{opacity:.95}
+.modal{position:fixed;inset:0;background:rgba(20,25,35,.45);display:flex;align-items:center;justify-content:center;z-index:8;padding:16px}
+.modal .card{max-width:520px;width:100%;margin:0}
+code{background:#f0f2f6;padding:1px 5px;border-radius:4px;font-size:12px}
+@media print{header,nav,.noprint{display:none!important}main{padding:0}.card{border:0}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Trade Books</h1><span class="co" id="coName"></span>
+  <span class="sync" id="syncStatus">Not backed up yet</span>
+</header>
+<nav id="nav"></nav>
+<main id="app"></main>
+<div id="toast"></div>
+<div id="modalRoot"></div>
+
+<script>
+"use strict";
+/* ====================== Storage ====================== */
+const KEY_DATA = "tradebooks.data.v1";
+const KEY_CFG = "tradebooks.cfg.v1";
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,v);return true}catch(e){return false}}
+
+const DEFAULT_ACCOUNTS = [
+ ["1000","Cash on hand","asset"],["1010","Bank - HKD","asset"],["1020","Bank - USD","asset"],
+ ["1100","Accounts receivable","asset"],["1200","Inventory / goods in transit","asset"],
+ ["1300","Deposits & prepayments","asset"],["1400","Amount due from director","asset"],
+ ["2000","Accounts payable","liability"],["2100","Accruals","liability"],
+ ["2200","Amount due to director","liability"],["2300","Profits tax payable","liability"],
+ ["3000","Share capital","equity"],["3100","Retained earnings","equity"],
+ ["4000","Sales","income"],["4100","Other income","income"],["4200","Exchange gain / (loss)","income"],
+ ["5000","Cost of sales - purchases","expense"],["5100","Freight & insurance","expense"],
+ ["5200","Customs declaration & trade charges","expense"],
+ ["6000","Bank charges","expense"],["6100","Audit & accounting fees","expense"],
+ ["6200","Company secretary fees","expense"],["6300","Business registration fee","expense"],
+ ["6400","Rent & office","expense"],["6500","Salaries & MPF","expense"],
+ ["6600","Travel","expense"],["6700","Telephone & internet","expense"],["6900","General expenses","expense"]
+].map(([code,name,type])=>({code,name,type}));
+
+function blankData(){
+  return {version:1,updated:new Date().toISOString(),
+    company:{name:"",brn:"",fyStart:4,base:"HKD"},
+    accounts:DEFAULT_ACCOUNTS.map(a=>({...a})),
+    parties:[], entries:[], tdec:[], seq:1};
+}
+let D = (()=>{try{const s=lsGet(KEY_DATA);if(s){const o=JSON.parse(s);if(o&&o.version)return o}}catch(e){}return blankData()})();
+let CFG = (()=>{try{return Object.assign({token:"",chatId:"",pass:"",auto:true,lastBackup:null,lastMsgId:null,rateUSD:7.8},JSON.parse(lsGet(KEY_CFG)||"{}"))}catch(e){return {token:"",chatId:"",pass:"",auto:true,lastBackup:null,lastMsgId:null,rateUSD:7.8}}})();
+let dirty=false, autoTimer=null;
+function saveCfg(){lsSet(KEY_CFG,JSON.stringify(CFG))}
+function save(msg){
+  D.updated=new Date().toISOString();
+  if(!lsSet(KEY_DATA,JSON.stringify(D))) toast("Could not save in this browser — back up now!");
+  dirty=true; updateSync();
+  if(msg) toast(msg);
+  if(CFG.auto && CFG.token && CFG.chatId){clearTimeout(autoTimer);autoTimer=setTimeout(()=>backupNow(true),20000)}
+}
+
+/* ====================== Helpers ====================== */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const r2=n=>Math.round((+n||0)*100)/100;
+const fmt=n=>{n=r2(n);const s=Math.abs(n).toLocaleString("en-HK",{minimumFractionDigits:2,maximumFractionDigits:2});return n<0?"("+s+")":s};
+const today=()=>new Date().toISOString().slice(0,10);
+const addDays=(d,n)=>{const x=new Date(d+"T00:00:00Z");x.setUTCDate(x.getUTCDate()+n);return x.toISOString().slice(0,10)};
+const daysBetween=(a,b)=>Math.round((new Date(b+"T00:00:00Z")-new Date(a+"T00:00:00Z"))/864e5);
+const acc=code=>D.accounts.find(a=>a.code===code);
+const accName=code=>{const a=acc(code);return a?a.code+" "+a.name:code};
+const accOpts=(sel,types)=>D.accounts.filter(a=>!types||types.includes(a.type)).map(a=>`<option value="${a.code}" ${a.code===sel?"selected":""}>${esc(a.code+" "+a.name)}</option>`).join("");
+const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36);
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("on"),2600)}
+function fyRange(){const m=D.company.fyStart||4;const n=new Date();let y=n.getFullYear();if(n.getMonth()+1<m)y--;const s=`${y}-${String(m).padStart(2,"0")}-01`;const e=addDays(`${y+1}-${String(m).padStart(2,"0")}-01`,-1);return [s,e]}
+function confirmBox(text,onYes,yesLabel="Delete"){
+  $("#modalRoot").innerHTML=`<div class="modal"><div class="card"><p>${esc(text)}</p><div class="row" style="justify-content:flex-end"><button class="btn" id="mNo">Cancel</button><button class="btn p" id="mYes">${esc(yesLabel)}</button></div></div></div>`;
+  $("#mNo").onclick=()=>$("#modalRoot").innerHTML="";
+  $("#mYes").onclick=()=>{$("#modalRoot").innerHTML="";onYes()};
+}
+function download(name,text,type){
+  try{const b=new Blob([text],{type:type||"text/plain"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}catch(e){toast("Download blocked by this browser")}
+}
+
+/* ====================== Ledger math ====================== */
+const sign=t=>(t==="asset"||t==="expense")?1:-1;
+function balances(from,to){ // natural-sign balances per account within [from,to]
+  const b={};D.accounts.forEach(a=>b[a.code]=0);
+  for(const e of D.entries){ if((from&&e.date<from)||(to&&e.date>to))continue;
+    for(const l of e.lines){ if(!(l.acc in b))b[l.acc]=0; b[l.acc]+=(+l.dr||0)-(+l.cr||0) } }
+  const out={};for(const k in b){const a=acc(k);out[k]=r2(b[k]*(a?sign(a.type):1))}return out;
+}
+function entryTotal(e){return r2(e.lines.reduce((s,l)=>s+(+l.dr||0),0))}
+function partyName(id){const p=D.parties.find(p=>p.id===id);return p?p.name:""}
+
+/* ====================== Telegram backup ====================== */
+async function tg(method,body,isForm){
+  const url=`https://api.telegram.org/bot${CFG.token}/${method}`;
+  const res=await fetch(url,isForm?{method:"POST",body}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})});
+  const j=await res.json().catch(()=>({ok:false,description:"Bad response ("+res.status+")"}));
+  if(!j.ok) throw new Error(j.description||"Telegram error");
+  return j.result;
+}
+async function deriveKey(pass,salt){
+  const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pass),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:200000,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+}
+const b64=buf=>btoa(String.fromCharCode(...new Uint8Array(buf)));
+const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function packBackup(){
+  const plain=JSON.stringify(D);
+  if(!CFG.pass) return {name:"plain",text:plain};
+  const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const key=await deriveKey(CFG.pass,salt);
+  const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,new TextEncoder().encode(plain));
+  // chunked base64 to avoid call-stack limits on big files
+  const u=new Uint8Array(ct);let s="";for(let i=0;i<u.length;i+=32768)s+=String.fromCharCode(...u.subarray(i,i+32768));
+  return {name:"enc",text:JSON.stringify({tradebooksEncrypted:1,salt:b64(salt),iv:b64(iv),data:btoa(s)})};
+}
+async function unpackBackup(text,passOverride){
+  let o=JSON.parse(text);
+  if(o&&o.tradebooksEncrypted){
+    const pass=passOverride??CFG.pass;
+    if(!pass) throw new Error("This backup is encrypted — enter the backup passphrase in Settings first.");
+    const key=await deriveKey(pass,unb64(o.salt));
+    let pt;try{pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:unb64(o.iv)},key,unb64(o.data))}catch(e){throw new Error("Wrong passphrase for this backup.")}
+    o=JSON.parse(new TextDecoder().decode(pt));
+  }
+  if(!o||!o.version||!Array.isArray(o.entries)) throw new Error("Not a Trade Books backup file.");
+  return o;
+}
+let backingUp=false;
+async function backupNow(silent){
+  if(!CFG.token||!CFG.chatId){if(!silent)toast("Set up Telegram in Settings first");return false}
+  if(backingUp)return false; backingUp=true; updateSync("Backing up…");
+  try{
+    const pk=await packBackup();
+    const stamp=new Date().toISOString().replace(/[:T]/g,"-").slice(0,16);
+    const slug=(D.company.name||"books").replace(/[^a-z0-9]+/gi,"-").toLowerCase();
+    const fd=new FormData();
+    fd.append("chat_id",CFG.chatId);
+    fd.append("document",new Blob([pk.text],{type:"application/json"}),`${slug}-backup-${stamp}${pk.name==="enc"?".enc":""}.json`);
+    fd.append("caption",`📒 Trade Books backup — ${D.company.name||""}\n${D.entries.length} entries · ${new Date().toLocaleString()}${pk.name==="enc"?"\n🔒 encrypted":""}`);
+    fd.append("disable_notification","true");
+    const msg=await tg("sendDocument",fd,true);
+    try{await tg("pinChatMessage",{chat_id:CFG.chatId,message_id:msg.message_id,disable_notification:true})}catch(e){/* pin needs admin rights in groups; restore falls back to last known id */}
+    CFG.lastBackup=new Date().toISOString();CFG.lastMsgId=msg.message_id;CFG.lastFileId=msg.document&&msg.document.file_id;saveCfg();
+    dirty=false;updateSync();if(!silent)toast("Backed up to Telegram ✓");return true;
+  }catch(e){updateSync("Backup failed: "+e.message);if(!silent)toast("Backup failed: "+e.message);return false}
+  finally{backingUp=false}
+}
+async function fetchLatestBackupText(){
+  let fileId=null;
+  try{const chat=await tg("getChat",{chat_id:CFG.chatId});const pm=chat.pinned_message;if(pm&&pm.document)fileId=pm.document.file_id}catch(e){}
+  if(!fileId)fileId=CFG.lastFileId;
+  if(!fileId)throw new Error("No pinned backup found in that chat. Use 'Restore from file' with a backup downloaded from Telegram.");
+  const f=await tg("getFile",{file_id:fileId});
+  const res=await fetch(`https://api.telegram.org/file/bot${CFG.token}/${f.file_path}`);
+  if(!res.ok)throw new Error("Could not download backup ("+res.status+")");
+  return res.text();
+}
+function updateSync(text){
+  const el=$("#syncStatus");if(!el)return;
+  if(text){el.textContent=text;return}
+  if(!CFG.token||!CFG.chatId){el.textContent="Telegram backup not set up";return}
+  el.textContent=(CFG.lastBackup?"Last backup "+new Date(CFG.lastBackup).toLocaleString():"Not backed up yet")+(dirty?" · unsaved changes":"");
+}
+
+/* ====================== Views ====================== */
+const VIEWS=[["dash","Dashboard"],["entry","New entry"],["journal","Journal"],["reports","Reports"],["parties","Customers & suppliers"],["tdec","Customs (TDEC)"],["accounts","Chart of accounts"],["settings","Settings & backup"]];
+let view=(location.hash||"").slice(1)||"dash";
+function renderNav(){$("#nav").innerHTML=VIEWS.map(([k,l])=>`<button class="${k===view?"on":""}" data-v="${k}">${l}</button>`).join("");
+  $("#nav").querySelectorAll("button").forEach(b=>b.onclick=()=>go(b.dataset.v))}
+function go(v,arg){view=v;try{history.replaceState(null,"","#"+v)}catch(e){}renderNav();(R[v]||R.dash)(arg);window.scrollTo(0,0)}
+window.addEventListener("hashchange",()=>{const v=location.hash.slice(1);if(v&&v!==view&&R[v])go(v)});
+
+const R={};
+
+/* ---------- Dashboard ---------- */
+R.dash=function(){
+  $("#coName").textContent=D.company.name?("· "+D.company.name):"";
+  if(!D.company.name){ $("#app").innerHTML=`<div class="card"><h2>Welcome</h2><p>Start by entering the company details and connecting the Telegram backup.</p><button class="btn p" onclick="go('settings')">Go to Settings</button></div>`;return}
+  const [fs,fe]=fyRange();const b=balances(null,today());const p=balances(fs,fe);
+  const cash=["1000","1010","1020"].reduce((s,c)=>s+(b[c]||0),0);
+  const inc=D.accounts.filter(a=>a.type==="income").reduce((s,a)=>s+(p[a.code]||0),0);
+  const exp=D.accounts.filter(a=>a.type==="expense").reduce((s,a)=>s+(p[a.code]||0),0);
+  const dueT=D.tdec.filter(t=>!t.filed);
+  const overdue=dueT.filter(t=>t.date&&addDays(t.date,14)<today());
+  $("#app").innerHTML=`
+  <div class="grid g4">
+    ${kpi("Cash & bank (HKD)",cash)}${kpi("Receivables",b["1100"]||0)}${kpi("Payables",b["2000"]||0)}${kpi(`Profit this FY (${fs.slice(0,7)} → ${fe.slice(0,7)})`,inc-exp)}
+  </div>
+  ${overdue.length?`<div class="msg bad">⚠ ${overdue.length} customs declaration(s) overdue (more than 14 days). <a href="#tdec" onclick="go('tdec');return false">Open Customs tracker</a></div>`:""}
+  ${dueT.length&&!overdue.length?`<div class="msg warn">${dueT.length} customs declaration(s) still to file. <a href="#tdec" onclick="go('tdec');return false">Open Customs tracker</a></div>`:""}
+  ${(!CFG.token||!CFG.chatId)?`<div class="msg warn">Telegram backup isn't set up — your books only live in this browser. <a href="#settings" onclick="go('settings');return false">Set it up</a></div>`:""}
+  <div class="card" style="margin-top:16px"><h2>Recent entries</h2>${entryTable(D.entries.slice().sort(sortEntries).slice(0,10))}
+  <div class="row" style="margin-top:10px"><button class="btn p" onclick="go('entry')">+ New entry</button><button class="btn" onclick="go('journal')">All entries</button></div></div>`;
+};
+const kpi=(l,v)=>`<div class="card kpi" style="margin:0"><div class="l">${esc(l)}</div><div class="v">${fmt(v)}</div></div>`;
+const sortEntries=(a,b)=>b.date.localeCompare(a.date)||(b.no||0)-(a.no||0);
+function entryTable(list,withActions){
+  if(!list.length)return `<p class="muted">No entries yet.</p>`;
+  return `<div class="scroll"><table><thead><tr><th>Date</th><th>No.</th><th>Type</th><th>Ref</th><th>Party</th><th>Description</th><th class="n">Original</th><th class="n">HKD</th>${withActions?"<th></th>":""}</tr></thead><tbody>${
+   list.map(e=>`<tr><td>${e.date}</td><td>${e.no||""}</td><td><span class="pill neu">${esc(e.kind)}</span></td><td>${esc(e.ref)}</td><td>${esc(partyName(e.party))}</td><td>${esc(e.memo)}<div class="small muted">${e.lines.map(l=>(l.dr?"Dr ":"Cr ")+esc(accName(l.acc))).join(" · ")}</div></td><td class="n">${e.ccy&&e.ccy!=="HKD"?esc(e.ccy)+" "+fmt(e.amt):""}</td><td class="n">${fmt(entryTotal(e))}</td>${withActions?`<td class="n"><button class="btn sm" onclick="go('entry','${e.id}')">Edit</button> <button class="btn sm d" onclick="delEntry('${e.id}')">Del</button></td>`:""}</tr>`).join("")}</tbody></table></div>`;
+}
+function delEntry(id){confirmBox("Delete this entry? This can't be undone (except by restoring a backup).",()=>{D.entries=D.entries.filter(e=>e.id!==id);save("Entry deleted");go(view)})}
+
+/* ---------- New / edit entry ---------- */
+const PRESETS={
+ "Sale":{dr:"1100",cr:"4000",party:"customer",hint:"Invoice to a customer (on credit). Dr Receivables / Cr Sales"},
+ "Purchase":{dr:"5000",cr:"2000",party:"supplier",hint:"Supplier invoice (on credit). Dr Cost of sales / Cr Payables"},
+ "Receipt":{dr:"1020",cr:"1100",party:"customer",hint:"Customer pays you. Dr Bank / Cr Receivables"},
+ "Payment":{dr:"2000",cr:"1020",party:"supplier",hint:"You pay a supplier. Dr Payables / Cr Bank"},
+ "Expense":{dr:"6900",cr:"1010",party:"",hint:"Paid expense (fees, rent, bank charges…). Dr Expense / Cr Bank"},
+ "Director paid":{dr:"6900",cr:"2200",party:"",hint:"Director paid a company cost personally. Dr Expense / Cr Due to director"},
+ "Capital":{dr:"1010",cr:"3000",party:"",hint:"Share capital paid in. Dr Bank / Cr Share capital"},
+ "Transfer":{dr:"1010",cr:"1020",party:"",hint:"Move money between bank accounts (e.g. USD → HKD)"},
+ "Journal":{journal:true,hint:"Manual multi-line journal (adjustments, FX differences, accruals)"}
+};
+R.entry=function(editId){
+  const ed=editId?D.entries.find(e=>e.id===editId):null;
+  let kind=ed?ed.kind:"Sale";
+  const draw=()=>{
+    const P=PRESETS[kind]||PRESETS.Journal;
+    const isJ=!!P.journal;
+    const l0=ed&&!isJ?ed.lines:null;
+    $("#app").innerHTML=`<div class="card"><h2>${ed?"Edit entry #"+ed.no:"New entry"}</h2>
+    <div class="row"><div><label>Type</label><select id="fKind">${Object.keys(PRESETS).map(k=>`<option ${k===kind?"selected":""}>${k}</option>`).join("")}</select></div>
+    <div><label>Date</label><input type="date" id="fDate" value="${ed?ed.date:today()}"></div>
+    <div><label>Reference (invoice / AWB no.)</label><input id="fRef" value="${esc(ed?ed.ref:"")}"></div>
+    <div><label>Customer / supplier</label><select id="fParty"><option value="">—</option>${D.parties.map(p=>`<option value="${p.id}" ${ed&&ed.party===p.id?"selected":""}>${esc(p.name)} (${p.kind})</option>`).join("")}</select></div></div>
+    <p class="small muted">${esc(P.hint)} <a href="#parties" onclick="go('parties');return false">+ add customer/supplier</a></p>
+    <div class="row"><div style="flex:3 1 300px"><label>Description</label><input id="fMemo" value="${esc(ed?ed.memo:"")}" placeholder="e.g. 2,000 pcs Samsung DDR5 64GB RDIMM"></div></div>
+    ${isJ?journalLines(ed):`
+    <div class="row" style="margin-top:10px">
+      <div><label>Currency</label><select id="fCcy">${["HKD","USD","CNY","EUR","GBP","SGD","INR","AED","JPY"].map(c=>`<option ${(ed?ed.ccy:"USD")===c?"selected":""}>${c}</option>`).join("")}</select></div>
+      <div><label>Amount (in that currency)</label><input type="number" step="0.01" id="fAmt" value="${ed?ed.amt:""}"></div>
+      <div><label>Rate to HKD</label><input type="number" step="0.0001" id="fRate" value="${ed?ed.rate:CFG.rateUSD}"></div>
+      <div><label>HKD amount</label><input id="fHkd" disabled></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div><label>Debit account</label><select id="fDr">${accOpts(l0?l0[0].acc:P.dr)}</select></div>
+      <div><label>Credit account</label><select id="fCr">${accOpts(l0?l0[1].acc:P.cr)}</select></div>
+    </div>`}
+    <div class="row" style="margin-top:14px"><button class="btn p" id="fSave">${ed?"Save changes":"Save entry"}</button>${ed?`<button class="btn" onclick="go('journal')">Cancel</button>`:""}<span id="fErr" class="small" style="color:var(--bad)"></span></div></div>`;
+    $("#fKind").onchange=e=>{kind=e.target.value;draw()};
+    if(!isJ){
+      const upd=()=>{const c=$("#fCcy").value;if(c==="HKD")$("#fRate").value=1;else if(+$("#fRate").value===1&&c==="USD")$("#fRate").value=CFG.rateUSD;$("#fHkd").value=fmt((+$("#fAmt").value||0)*(+$("#fRate").value||0))};
+      ["fCcy","fAmt","fRate"].forEach(i=>$("#"+i).oninput=upd);upd();
+    } else wireJournal();
+    $("#fSave").onclick=()=>{
+      const date=$("#fDate").value;if(!date)return $("#fErr").textContent="Pick a date.";
+      const base={date,ref:$("#fRef").value.trim(),party:$("#fParty").value,memo:$("#fMemo").value.trim(),kind};
+      let lines,extra={};
+      if(isJ){lines=readJournal();if(!lines)return;extra={ccy:"HKD",amt:entrySum(lines),rate:1}}
+      else{const amt=+$("#fAmt").value,rate=+$("#fRate").value,ccy=$("#fCcy").value;
+        if(!(amt>0))return $("#fErr").textContent="Enter an amount above zero.";
+        if(!(rate>0))return $("#fErr").textContent="Enter the exchange rate.";
+        const dr=$("#fDr").value,cr=$("#fCr").value;if(dr===cr)return $("#fErr").textContent="Debit and credit accounts must differ.";
+        const h=r2(amt*rate);lines=[{acc:dr,dr:h,cr:0},{acc:cr,dr:0,cr:h}];extra={ccy,amt:r2(amt),rate};
+        if(ccy==="USD"&&rate!==CFG.rateUSD){CFG.rateUSD=rate;saveCfg()}}
+      if(ed){Object.assign(ed,base,extra,{lines});save("Entry updated");go("journal")}
+      else{D.entries.push({id:uid(),no:D.seq++,...base,...extra,lines});save("Entry #"+(D.seq-1)+" saved");go("entry")}
+    };
+  };
+  draw();
+};
+const entrySum=l=>r2(l.reduce((s,x)=>s+(+x.dr||0),0));
+function journalLines(ed){
+  const ls=ed&&ed.kind==="Journal"?ed.lines:[{acc:"",dr:"",cr:""},{acc:"",dr:"",cr:""}];
+  return `<table class="lines" style="margin-top:10px"><thead><tr><th>Account</th><th class="n">Debit HKD</th><th class="n">Credit HKD</th><th></th></tr></thead><tbody id="jBody">${ls.map(jRow).join("")}</tbody>
+  <tfoot><tr><td><button class="btn sm" id="jAdd">+ line</button></td><td class="n" id="jDr"></td><td class="n" id="jCr"></td><td></td></tr></tfoot></table>`;
+}
+const jRow=l=>`<tr><td><select class="jA"><option value="">— account —</option>${accOpts(l.acc)}</select></td><td><input class="jD" type="number" step="0.01" value="${l.dr||""}"></td><td><input class="jC" type="number" step="0.01" value="${l.cr||""}"></td><td><button class="btn sm d jX">✕</button></td></tr>`;
+function wireJournal(){
+  const tot=()=>{let d=0,c=0;document.querySelectorAll("#jBody tr").forEach(tr=>{d+=+tr.querySelector(".jD").value||0;c+=+tr.querySelector(".jC").value||0});
+    $("#jDr").textContent=fmt(d);$("#jCr").textContent=fmt(c);$("#jCr").style.color=r2(d)===r2(c)?"":"var(--bad)"};
+  const bind=()=>{document.querySelectorAll("#jBody input").forEach(i=>i.oninput=tot);document.querySelectorAll(".jX").forEach(b=>b.onclick=()=>{b.closest("tr").remove();tot()})};
+  $("#jAdd").onclick=()=>{$("#jBody").insertAdjacentHTML("beforeend",jRow({}));bind()};bind();tot();
+}
+function readJournal(){
+  const lines=[];let d=0,c=0;
+  for(const tr of document.querySelectorAll("#jBody tr")){const a=tr.querySelector(".jA").value,dr=r2(tr.querySelector(".jD").value),cr=r2(tr.querySelector(".jC").value);
+    if(!a&&!dr&&!cr)continue; if(!a){$("#fErr").textContent="Every line needs an account.";return null}
+    if(dr&&cr){$("#fErr").textContent="A line can be debit or credit, not both.";return null}
+    lines.push({acc:a,dr,cr});d+=dr;c+=cr}
+  if(lines.length<2){$("#fErr").textContent="A journal needs at least two lines.";return null}
+  if(r2(d)!==r2(c)){$("#fErr").textContent=`Debits (${fmt(d)}) must equal credits (${fmt(c)}).`;return null}
+  return lines;
+}
+
+/* ---------- Journal ---------- */
+R.journal=function(){
+  $("#app").innerHTML=`<div class="card"><h2>Journal</h2>
+  <div class="row noprint"><div><label>Search</label><input id="jq" placeholder="ref, party, description…"></div><div><label>From</label><input type="date" id="jf"></div><div><label>To</label><input type="date" id="jt"></div>
+  <div style="flex:0 0 auto"><button class="btn" id="jcsv">Export CSV</button></div></div><div id="jlist" style="margin-top:12px"></div></div>`;
+  const draw=()=>{const q=$("#jq").value.toLowerCase(),f=$("#jf").value,t=$("#jt").value;
+    const l=D.entries.filter(e=>(!f||e.date>=f)&&(!t||e.date<=t)&&(!q||[e.ref,e.memo,partyName(e.party),e.kind].join(" ").toLowerCase().includes(q))).sort(sortEntries);
+    $("#jlist").innerHTML=entryTable(l,true)};
+  ["jq","jf","jt"].forEach(i=>$("#"+i).oninput=draw);draw();
+  $("#jcsv").onclick=()=>{const rows=[["Date","No","Type","Ref","Party","Description","Account","Debit HKD","Credit HKD","Currency","Original amount","Rate"]];
+    D.entries.slice().sort((a,b)=>a.date.localeCompare(b.date)||a.no-b.no).forEach(e=>e.lines.forEach(l=>rows.push([e.date,e.no,e.kind,e.ref,partyName(e.party),e.memo,accName(l.acc),l.dr||"",l.cr||"",e.ccy||"",e.amt||"",e.rate||""])));
+    download("journal.csv",rows.map(r=>r.map(c=>`"${String(c??"").replace(/"/g,'""')}"`).join(",")).join("\n"),"text/csv")};
+};
+
+/* ---------- Reports ---------- */
+R.reports=function(){
+  const [fs,fe]=fyRange();
+  $("#app").innerHTML=`<div class="card noprint"><div class="row"><div><label>Report</label><select id="rt"><option value="pl">Profit & loss</option><option value="bs">Balance sheet</option><option value="tb">Trial balance</option><option value="gl">Account ledger</option></select></div>
+  <div><label>From</label><input type="date" id="rf" value="${fs}"></div><div><label>To / as at</label><input type="date" id="rto" value="${fe}"></div>
+  <div id="rgl" class="hide"><label>Account</label><select id="rga">${accOpts("1100")}</select></div>
+  <div style="flex:0 0 auto"><button class="btn" id="rcsv">Export CSV</button></div></div></div><div class="card" id="rout"></div>`;
+  let last=[];
+  const draw=()=>{const t=$("#rt").value,f=$("#rf").value,to=$("#rto").value;$("#rgl").classList.toggle("hide",t!=="gl");
+    const co=esc(D.company.name||"");let h="",rows=[];
+    if(t==="pl"){const b=balances(f,to);const sec=(type,title)=>{const L=D.accounts.filter(a=>a.type===type&&b[a.code]);let s=0;h+=`<tr class="sec"><td>${title}</td><td></td></tr>`;L.forEach(a=>{s+=b[a.code];h+=`<tr><td>${esc(a.code+" "+a.name)}</td><td class="n">${fmt(b[a.code])}</td></tr>`;rows.push([a.code,a.name,b[a.code]])});h+=`<tr><td><b>Total ${title.toLowerCase()}</b></td><td class="n"><b>${fmt(s)}</b></td></tr>`;return s};
+      const i=sec("income","Income"),e=sec("expense","Expenses");h+=`<tr class="tot"><td>Net profit / (loss)</td><td class="n">${fmt(i-e)}</td></tr>`;rows.push(["","Net profit",r2(i-e)]);
+      h=`<h2>${co} — Profit & loss, ${f} to ${to} (HKD)</h2><table>${h}</table>`}
+    if(t==="bs"){const b=balances(null,to);const pf=["income","expense"].reduce((s,ty)=>s+D.accounts.filter(a=>a.type===ty).reduce((x,a)=>x+(ty==="income"?1:-1)*(b[a.code]||0),0),0);
+      const sec=(type,title,extra)=>{let s=0;h+=`<tr class="sec"><td>${title}</td><td></td></tr>`;D.accounts.filter(a=>a.type===type&&b[a.code]).forEach(a=>{s+=b[a.code];h+=`<tr><td>${esc(a.code+" "+a.name)}</td><td class="n">${fmt(b[a.code])}</td></tr>`;rows.push([a.code,a.name,b[a.code]])});
+        if(extra){s+=extra[1];h+=`<tr><td>${extra[0]}</td><td class="n">${fmt(extra[1])}</td></tr>`;rows.push(["",extra[0],r2(extra[1])])}h+=`<tr><td><b>Total ${title.toLowerCase()}</b></td><td class="n"><b>${fmt(s)}</b></td></tr>`;return s};
+      const A=sec("asset","Assets"),L=sec("liability","Liabilities"),E=sec("equity","Equity",["Accumulated profit / (loss) not yet closed",pf]);
+      const diff=r2(A-L-E);h+=`<tr class="tot"><td>Liabilities + equity</td><td class="n">${fmt(L+E)}</td></tr>`;
+      h=`<h2>${co} — Balance sheet as at ${to} (HKD)</h2>${diff?`<div class="msg bad">Out of balance by ${fmt(diff)}</div>`:`<div class="msg ok">Balanced ✓</div>`}<table>${h}</table>`}
+    if(t==="tb"){const raw={};D.entries.forEach(e=>{if(e.date>to)return;e.lines.forEach(l=>{raw[l.acc]=(raw[l.acc]||0)+(+l.dr||0)-(+l.cr||0)})});let td=0,tc=0;
+      D.accounts.forEach(a=>{const v=r2(raw[a.code]||0);if(!v)return;const d=v>0?v:0,c=v<0?-v:0;td+=d;tc+=c;h+=`<tr><td>${esc(a.code+" "+a.name)}</td><td class="n">${d?fmt(d):""}</td><td class="n">${c?fmt(c):""}</td></tr>`;rows.push([a.code,a.name,d,c])});
+      h=`<h2>${co} — Trial balance as at ${to} (HKD)</h2><table><thead><tr><th>Account</th><th class="n">Debit</th><th class="n">Credit</th></tr></thead>${h}<tr class="tot"><td>Total</td><td class="n">${fmt(td)}</td><td class="n">${fmt(tc)}</td></tr></table>`}
+    if(t==="gl"){const ac=$("#rga").value,a=acc(ac),sg=a?sign(a.type):1;let run=0;
+      D.entries.filter(e=>e.date<f).forEach(e=>e.lines.forEach(l=>{if(l.acc===ac)run+=sg*((+l.dr||0)-(+l.cr||0))}));
+      h=`<tr><td>${f}</td><td colspan="4">Opening balance</td><td class="n">${fmt(run)}</td></tr>`;
+      D.entries.filter(e=>e.date>=f&&e.date<=to).sort((x,y)=>x.date.localeCompare(y.date)||x.no-y.no).forEach(e=>e.lines.forEach(l=>{if(l.acc!==ac)return;run+=sg*((+l.dr||0)-(+l.cr||0));
+        h+=`<tr><td>${e.date}</td><td>${e.no}</td><td>${esc(e.ref)}</td><td>${esc((partyName(e.party)?partyName(e.party)+" — ":"")+e.memo)}</td><td class="n">${l.dr?fmt(l.dr):"("+fmt(l.cr)+")"}</td><td class="n">${fmt(run)}</td></tr>`;rows.push([e.date,e.no,e.ref,e.memo,l.dr||0,l.cr||0,r2(run)])}));
+      h=`<h2>${co} — Ledger: ${esc(accName(ac))}, ${f} to ${to} (HKD)</h2><div class="scroll"><table><thead><tr><th>Date</th><th>No.</th><th>Ref</th><th>Description</th><th class="n">Dr / (Cr)</th><th class="n">Balance</th></tr></thead>${h}</table></div>`}
+    $("#rout").innerHTML=h;last=rows};
+  ["rt","rf","rto","rga"].forEach(i=>$("#"+i).oninput=draw);draw();
+  $("#rcsv").onclick=()=>download($("#rt").value+"-report.csv",last.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n"),"text/csv");
+};
+
+/* ---------- Parties ---------- */
+R.parties=function(){
+  const b={};D.entries.forEach(e=>{if(!e.party)return;e.lines.forEach(l=>{if(l.acc==="1100"||l.acc==="2000"){b[e.party]=b[e.party]||{ar:0,ap:0};if(l.acc==="1100")b[e.party].ar+=(+l.dr||0)-(+l.cr||0);else b[e.party].ap+=(+l.cr||0)-(+l.dr||0)}})});
+  $("#app").innerHTML=`<div class="card"><h2>Add customer / supplier</h2><div class="row"><div><label>Name</label><input id="pn"></div><div><label>Type</label><select id="pk"><option>customer</option><option>supplier</option><option>both</option></select></div><div><label>Country</label><input id="pc"></div><div style="flex:0 0 auto"><button class="btn p" id="pa">Add</button></div></div></div>
+  <div class="card"><h2>Balances (HKD)</h2>${D.parties.length?`<table><thead><tr><th>Name</th><th>Type</th><th>Country</th><th class="n">They owe us</th><th class="n">We owe them</th><th></th></tr></thead><tbody>${D.parties.map(p=>`<tr><td>${esc(p.name)}</td><td>${p.kind}</td><td>${esc(p.country||"")}</td><td class="n">${fmt((b[p.id]||{}).ar||0)}</td><td class="n">${fmt((b[p.id]||{}).ap||0)}</td><td class="n"><button class="btn sm d" onclick="delParty('${p.id}')">Del</button></td></tr>`).join("")}</tbody></table>`:`<p class="muted">None yet.</p>`}
+  <p class="small muted">Balances use Accounts receivable (1100) and Accounts payable (2000). If a foreign-currency invoice is paid at a different rate, post the small difference with a Journal to 4200 Exchange gain / (loss).</p></div>`;
+  $("#pa").onclick=()=>{const n=$("#pn").value.trim();if(!n)return toast("Enter a name");D.parties.push({id:uid(),name:n,kind:$("#pk").value,country:$("#pc").value.trim()});save("Added "+n);go("parties")};
+};
+function delParty(id){if(D.entries.some(e=>e.party===id))return toast("This party has entries — can't delete");confirmBox("Delete this customer/supplier?",()=>{D.parties=D.parties.filter(p=>p.id!==id);save();go("parties")})}
+
+/* ---------- TDEC tracker ---------- */
+R.tdec=function(){
+  const t=today();
+  $("#app").innerHTML=`<div class="card"><h2>Add shipment to declare</h2>
+  <p class="small muted">Every import and export/re-export through Hong Kong must be declared to Customs within 14 days. Goods shipped directly between two other countries (never touching HK) don't need a declaration.</p>
+  <div class="row"><div><label>Type</label><select id="tk"><option>Import (Form 1)</option><option>Re-export (Form 2)</option><option>Export (Form 2)</option></select></div>
+  <div><label>Arrival / departure date</label><input type="date" id="td"></div><div><label>AWB / B/L no.</label><input id="tr"></div>
+  <div><label>Goods</label><input id="tg"></div><div><label>Value HKD</label><input type="number" id="tv"></div><div style="flex:0 0 auto"><button class="btn p" id="ta">Add</button></div></div></div>
+  <div class="card"><h2>Declarations</h2>${D.tdec.length?`<div class="scroll"><table><thead><tr><th>Type</th><th>Date</th><th>Deadline</th><th>AWB / B/L</th><th>Goods</th><th class="n">Value HKD</th><th>Status</th><th>UDR / receipt no.</th><th></th></tr></thead><tbody>${
+   D.tdec.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(x=>{const dl=addDays(x.date,14);const left=daysBetween(t,dl);
+   const st=x.filed?`<span class="pill ok">Filed ${esc(x.filedOn||"")}</span>`:left<0?`<span class="pill bad">Overdue ${-left}d</span>`:`<span class="pill warn">${left}d left</span>`;
+   return `<tr><td>${esc(x.kind)}</td><td>${x.date}</td><td>${dl}</td><td>${esc(x.ref)}</td><td>${esc(x.goods)}</td><td class="n">${fmt(x.value)}</td><td>${st}</td><td><input value="${esc(x.udr||"")}" placeholder="after filing" onchange="setUdr('${x.id}',this.value)"></td><td class="n">${x.filed?"":`<button class="btn sm" onclick="markFiled('${x.id}')">Mark filed</button>`} <button class="btn sm d" onclick="delTdec('${x.id}')">Del</button></td></tr>`}).join("")}</tbody></table></div>`:`<p class="muted">No shipments yet.</p>`}
+  <p class="small muted">Government declaration charge is value-based and capped at HK$200 per declaration; late lodgement adds a penalty. Record those charges as an Expense to 5200.</p></div>`;
+  $("#ta").onclick=()=>{const d=$("#td").value;if(!d)return toast("Enter the date");D.tdec.push({id:uid(),kind:$("#tk").value,date:d,ref:$("#tr").value.trim(),goods:$("#tg").value.trim(),value:+$("#tv").value||0,filed:false});save("Shipment added");go("tdec")};
+};
+function markFiled(id){const x=D.tdec.find(t=>t.id===id);x.filed=true;x.filedOn=today();save("Marked filed");go("tdec")}
+function setUdr(id,v){const x=D.tdec.find(t=>t.id===id);x.udr=v.trim();save()}
+function delTdec(id){confirmBox("Delete this shipment?",()=>{D.tdec=D.tdec.filter(t=>t.id!==id);save();go("tdec")})}
+
+/* ---------- Accounts ---------- */
+R.accounts=function(){
+  const used=new Set();D.entries.forEach(e=>e.lines.forEach(l=>used.add(l.acc)));
+  $("#app").innerHTML=`<div class="card"><h2>Add account</h2><div class="row"><div><label>Code</label><input id="ac"></div><div style="flex:2 1 200px"><label>Name</label><input id="an"></div><div><label>Type</label><select id="at">${["asset","liability","equity","income","expense"].map(t=>`<option>${t}</option>`).join("")}</select></div><div style="flex:0 0 auto"><button class="btn p" id="aa">Add</button></div></div></div>
+  <div class="card"><h2>Chart of accounts</h2><table><thead><tr><th>Code</th><th>Name</th><th>Type</th><th></th></tr></thead><tbody>${D.accounts.slice().sort((a,b)=>a.code.localeCompare(b.code)).map(a=>`<tr><td>${esc(a.code)}</td><td><input value="${esc(a.name)}" onchange="renAcc('${esc(a.code)}',this.value)"></td><td>${a.type}</td><td class="n">${used.has(a.code)?`<span class="small muted">in use</span>`:`<button class="btn sm d" onclick="delAcc('${esc(a.code)}')">Del</button>`}</td></tr>`).join("")}</tbody></table></div>`;
+  $("#aa").onclick=()=>{const c=$("#ac").value.trim(),n=$("#an").value.trim();if(!c||!n)return toast("Enter code and name");if(acc(c))return toast("Code already exists");D.accounts.push({code:c,name:n,type:$("#at").value});save("Account added");go("accounts")};
+};
+function renAcc(c,v){acc(c).name=v.trim()||acc(c).name;save("Renamed")}
+function delAcc(c){confirmBox("Delete account "+c+"?",()=>{D.accounts=D.accounts.filter(a=>a.code!==c);save();go("accounts")})}
+
+/* ---------- Settings & backup ---------- */
+R.settings=function(){
+  $("#app").innerHTML=`<div class="card"><h2>Company</h2><div class="row">
+   <div style="flex:2 1 240px"><label>Company name</label><input id="sn" value="${esc(D.company.name)}"></div>
+   <div><label>BR number</label><input id="sb" value="${esc(D.company.brn)}"></div>
+   <div><label>Financial year starts</label><select id="sf">${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((m,i)=>`<option value="${i+1}" ${D.company.fyStart===i+1?"selected":""}>1 ${m}</option>`).join("")}</select></div>
+   <div><label>Default USD→HKD rate</label><input type="number" step="0.0001" id="sr" value="${CFG.rateUSD}"></div>
+   <div style="flex:0 0 auto"><button class="btn p" id="ss">Save</button></div></div></div>
+
+  <div class="card"><h2>Telegram backup</h2>
+   <p class="small muted">Your books are saved in this browser and backed up as a file to a private Telegram chat through your bot. The latest backup is pinned in that chat, so any device can restore it. The bot token stays in this browser only.</p>
+   <div class="row"><div style="flex:2 1 280px"><label>Bot token (from @BotFather)</label><input id="tt" type="password" value="${esc(CFG.token)}" placeholder="123456:ABC-…"></div>
+   <div><label>Chat ID</label><input id="tc" value="${esc(CFG.chatId)}" placeholder="e.g. 123456789"></div>
+   <div style="flex:0 0 auto"><button class="btn" id="tfind">Find my chat ID</button></div></div>
+   <div class="row" style="margin-top:10px"><div style="flex:2 1 280px"><label>Backup passphrase (optional — encrypts the backup; needed to restore)</label><input id="tp" type="password" value="${esc(CFG.pass)}"></div>
+   <div><label>Auto-backup after changes</label><select id="ta"><option value="1" ${CFG.auto?"selected":""}>On (20s after last change)</option><option value="0" ${!CFG.auto?"selected":""}>Off</option></select></div></div>
+   <div class="row" style="margin-top:12px"><button class="btn p" id="tsave">Save & test</button><button class="btn" id="tnow">Back up now</button><button class="btn" id="trest">Restore latest from Telegram</button></div>
+   <div id="tmsg"></div></div>
+
+  <div class="card"><h2>Files</h2><div class="row"><button class="btn" id="fexp">Download backup file</button>
+   <label class="btn" style="margin:0;color:var(--ink);font-size:14px">Restore from file<input type="file" id="fimp" accept=".json,application/json" class="hide"></label>
+   <button class="btn d" id="freset">Erase all data in this browser</button></div>
+   <p class="small muted">Tip: open the backup document in the Telegram chat, save it, then use “Restore from file” if automatic restore isn't possible.</p></div>`;
+  const msg=(t,c)=>$("#tmsg").innerHTML=`<div class="msg ${c||"neu"}">${t}</div>`;
+  $("#ss").onclick=()=>{D.company.name=$("#sn").value.trim();D.company.brn=$("#sb").value.trim();D.company.fyStart=+$("#sf").value;CFG.rateUSD=+$("#sr").value||7.8;saveCfg();save("Company saved");$("#coName").textContent=D.company.name?"· "+D.company.name:""};
+  const readT=()=>{CFG.token=$("#tt").value.trim();CFG.chatId=$("#tc").value.trim();CFG.pass=$("#tp").value;CFG.auto=$("#ta").value==="1";saveCfg();updateSync()};
+  $("#tfind").onclick=async()=>{readT();if(!CFG.token)return msg("Enter the bot token first.","warn");
+    try{const me=await tg("getMe");const up=await tg("getUpdates",{limit:50,timeout:0});const chats=[...new Map(up.map(u=>u.message||u.channel_post||u.my_chat_member).filter(Boolean).map(m=>[m.chat.id,m.chat])).values()];
+      if(!chats.length)return msg(`Bot @${esc(me.username)} found. Now open Telegram, send any message to @${esc(me.username)} (or add it to a private group), then press this button again.`,"warn");
+      msg("Pick your chat: "+chats.map(c=>`<button class="btn sm" onclick="document.getElementById('tc').value='${c.id}'">${esc(c.title||[c.first_name,c.last_name].filter(Boolean).join(" ")||c.username||c.id)} (${c.id})</button>`).join(" "),"ok")}
+    catch(e){msg(/conflict|webhook/i.test(e.message)?"Your bot server is already receiving this bot's messages (webhook/polling), so this button can't read them. Get your chat ID by messaging @userinfobot in Telegram and paste it in.":"Error: "+esc(e.message),"bad")}};
+  $("#tsave").onclick=async()=>{readT();if(!CFG.token||!CFG.chatId)return msg("Enter both the bot token and the chat ID.","warn");
+    try{const me=await tg("getMe");await tg("sendMessage",{chat_id:CFG.chatId,text:"✅ Trade Books connected. Backups will appear here.",disable_notification:true});msg(`Connected to @${esc(me.username)} — a test message was sent to the chat.`,"ok")}catch(e){msg("Couldn't connect: "+esc(e.message),"bad")}};
+  $("#tnow").onclick=async()=>{readT();if(await backupNow())msg("Backed up and pinned in the chat ✓","ok")};
+  $("#trest").onclick=()=>{readT();if(!CFG.token||!CFG.chatId)return msg("Set the token and chat ID first.","warn");
+    confirmBox("Replace the books in this browser with the latest backup from Telegram?",async()=>{try{const o=await unpackBackup(await fetchLatestBackupText());D=o;lsSet(KEY_DATA,JSON.stringify(D));dirty=false;updateSync();toast("Restored "+D.entries.length+" entries");go("dash")}catch(e){msg("Restore failed: "+esc(e.message),"bad")}},"Restore")};
+  $("#fexp").onclick=async()=>{const pk=await packBackup();download(`books-backup-${today()}${pk.name==="enc"?".enc":""}.json`,pk.text,"application/json")};
+  $("#fimp").onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>confirmBox("Replace the books in this browser with this file?",async()=>{try{CFG.pass=$("#tp").value;D=await unpackBackup(rd.result);save("Restored "+D.entries.length+" entries");go("dash")}catch(er){msg(esc(er.message),"bad")}},"Restore");rd.readAsText(f)};
+  $("#freset").onclick=()=>confirmBox("Erase ALL books in this browser? Make sure you have a backup.",()=>{D=blankData();save("Erased");go("settings")},"Erase");
+};
+
+window.addEventListener("beforeunload",e=>{if(dirty&&CFG.token&&CFG.chatId){backupNow(true)}});
+renderNav();updateSync();go(VIEWS.some(v=>v[0]===view)?view:"dash");
+</script>
+</body>
+</html>
